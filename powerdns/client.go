@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	freecache "github.com/coocood/freecache"
-	cleanhttp "github.com/hashicorp/go-cleanhttp"
+	"github.com/coocood/freecache"
+	"github.com/hashicorp/go-cleanhttp"
 )
 
 // DefaultSchema is the value used for the URL in case
@@ -197,11 +197,17 @@ type Record struct {
 
 // ResourceRecordSet represents a PowerDNS RRSet object
 type ResourceRecordSet struct {
-	Name       string   `json:"name"`
-	Type       string   `json:"type"`
-	ChangeType string   `json:"changetype"`
-	TTL        int      `json:"ttl"` // For API v1
-	Records    []Record `json:"records,omitempty"`
+	Name       string    `json:"name"`
+	Type       string    `json:"type"`
+	ChangeType string    `json:"changetype"`
+	TTL        int       `json:"ttl"` // For API v1
+	Records    []Record  `json:"records,omitempty"`
+	Comments   []Comment `json:"comments,omitempty"`
+}
+
+type Comment struct {
+	Content string `json:"content,omitempty"`
+	Account string `json:"account,omitempty"`
 }
 
 type zonePatchRequest struct {
@@ -460,11 +466,31 @@ func (client *Client) GetZoneInfoFromCache(zone string) (*ZoneInfo, error) {
 
 // ListRecords returns all records in Zone
 func (client *Client) ListRecords(zone string) ([]Record, error) {
+	rrsets, err := client.ListRRSets(zone)
+	if err != nil {
+		return nil, err
+	}
+
+	var records []Record
+	for _, rrs := range rrsets {
+		for _, record := range rrs.Records {
+			records = append(records, Record{
+				Name:    rrs.Name,
+				Type:    rrs.Type,
+				Content: record.Content,
+				TTL:     rrs.TTL,
+			})
+		}
+	}
+
+	return records, nil
+}
+
+func (client *Client) getZoneInfo(zone string) (*ZoneInfo, error) {
 	zoneInfo, err := client.GetZoneInfoFromCache(zone)
 	if err != nil {
 		log.Printf("[WARN] module.freecache: %s: %s", zone, err)
 	}
-
 	if zoneInfo == nil {
 		req, err := client.newRequest("GET", fmt.Sprintf("/servers/localhost/zones/%s", zone), nil)
 		if err != nil {
@@ -491,26 +517,12 @@ func (client *Client) ListRecords(zone string) ([]Record, error) {
 
 			err = client.Cache.Set([]byte(zone), cacheValue, client.CacheTTL)
 			if err != nil {
-				return nil, fmt.Errorf("The cache for REST API requests is enabled but the size isn't enough: cacheSize: %db \n %s",
-					DefaultCacheSize, err)
+				return nil, err
 			}
 		}
 	}
 
-	records := zoneInfo.Records
-	// Convert the API v1 response to v0 record structure
-	for _, rrs := range zoneInfo.ResourceRecordSets {
-		for _, record := range rrs.Records {
-			records = append(records, Record{
-				Name:    rrs.Name,
-				Type:    rrs.Type,
-				Content: record.Content,
-				TTL:     rrs.TTL,
-			})
-		}
-	}
-
-	return records, nil
+	return zoneInfo, nil
 }
 
 // ListRecordsInRRSet returns only records of specified name and type
@@ -537,6 +549,35 @@ func (client *Client) ListRecordsByID(zone string, recID string) ([]Record, erro
 		return nil, err
 	}
 	return client.ListRecordsInRRSet(zone, name, tpe)
+}
+
+//GetResourceRecordSet by zone and id
+func (client *Client) GetRRSetOfRecord(zone string, recID string) (*ResourceRecordSet, error) {
+	name, tpe, err := parseID(recID)
+	if err != nil {
+		return nil, err
+	}
+
+	rrsets, err := client.ListRRSets(zone)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, rrset := range rrsets {
+		if rrset.Name == name && rrset.Type == tpe {
+			return &rrset, nil
+		}
+	}
+	return nil, fmt.Errorf("Error getting rrset %s. Not found.", name)
+}
+
+//ListRRSets by zone
+func (client *Client) ListRRSets(zone string) ([]ResourceRecordSet, error) {
+	zoneInfo, err := client.getZoneInfo(zone)
+	if err != nil {
+		return nil, err
+	}
+	return zoneInfo.ResourceRecordSets, nil
 }
 
 // RecordExists checks if requested record exists in Zone

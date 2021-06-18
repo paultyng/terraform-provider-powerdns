@@ -42,6 +42,30 @@ resource "powerdns_record" "foobar" {
 }
 ```
 
+### Record with comments
+An example creating a record with comments:
+
+```hcl
+# Add a record with comments
+resource "powerdns_record" "foobar" {
+  zone    = "example.com."
+  name    = "www.example.com."
+  type = "A"
+  ttl = 60
+  records = [ "1.1.1.1" ]
+
+  comment { 
+    content = "Example comment #1"
+    account = "Example account #1"
+  }
+
+  comment { 
+    content = "Example comment #2"
+    account = "Example account #2"
+  }
+}
+```
+
 ### MX record example
 The following example shows, how to setup MX record with a priority of `10`.
 Please note that priority is not set as other `powerdns_record` properties; rather, it's part of the string that goes into `records` list.
@@ -145,6 +169,9 @@ The following arguments are supported:
 * `ttl` - (Required) The TTL of the record.
 * `records` - (Required) A string list of records.
 * `set_ptr` - (Optional) [**_Deprecated in PowerDNS 4.3.0_**] A boolean (true/false), determining whether API server should automatically create PTR record in the matching reverse zone. Existing PTR records are replaced. If no matching reverse zone, an error is thrown.
+* `comment` - (Optional) A comment about an RRSet.
+    *  `content` - (Required) The content of the comment.
+    *  `account` - (Required) The account of the comment.
 
 ### Attribute Reference
 

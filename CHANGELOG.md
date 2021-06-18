@@ -1,7 +1,8 @@
 ## 1.5.0 (Unreleased)
 
 FEATURES:
-  * **Added option to cache PowerDNS API response ** ([#81](https://github.com/pan-net/terraform-provider-powerdns/pull/81), @menai34)
+  * **Added option to cache PowerDNS API response** ([#81](https://github.com/pan-net/terraform-provider-powerdns/pull/81), @menai34)
+  * **Added comments attribute for powerdns zone resource** ([#87](https://github.com/pan-net/terraform-provider-powerdns/pull/87), @PetrusHahol)
 
 ## 1.4.1 (January 21, 2021)
 
