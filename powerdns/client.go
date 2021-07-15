@@ -204,6 +204,12 @@ type ResourceRecordSet struct {
 	Records    []Record `json:"records,omitempty"`
 }
 
+// ResourceZoneMetadata represents a PowerDNS Zone Metadata object
+type ResourceZoneMetadata struct {
+	Kind     string   `json:"kind"`
+	Metadata []string `json:"metadata"`
+}
+
 type zonePatchRequest struct {
 	RecordSets []ResourceRecordSet `json:"rrsets"`
 }
@@ -232,6 +238,11 @@ func (record *Record) ID() string {
 // ID returns a rrSet with the ID format
 func (rrSet *ResourceRecordSet) ID() string {
 	return rrSet.Name + idSeparator + rrSet.Type
+}
+
+// ID returns a zoneMetadata with the ID format
+func (metadata *ResourceZoneMetadata) ID(zone string) string {
+	return zone + idSeparator + metadata.Kind
 }
 
 // Returns name and type of record or record set based on its ID
@@ -269,7 +280,7 @@ func (client *Client) detectAPIVersion() (int, error) {
 	}
 
 	defer resp.Body.Close()
-	if resp.StatusCode == 200 {
+	if resp.StatusCode == http.StatusOK {
 		return 1, nil
 	}
 	return 0, nil
@@ -429,7 +440,7 @@ func (client *Client) DeleteZone(name string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusNoContent {
 		errorResp := new(errorResponse)
 		if err = json.NewDecoder(resp.Body).Decode(errorResp); err != nil {
 			return fmt.Errorf("Error deleting zone: %s", name)
@@ -582,7 +593,7 @@ func (client *Client) ReplaceRecordSet(zone string, rrSet ResourceRecordSet) (st
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		errorResp := new(errorResponse)
 		if err = json.NewDecoder(resp.Body).Decode(errorResp); err != nil {
 			return "", fmt.Errorf("Error creating record set: %s", rrSet.ID())
@@ -615,7 +626,7 @@ func (client *Client) DeleteRecordSet(zone string, name string, tpe string) erro
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		errorResp := new(errorResponse)
 		if err = json.NewDecoder(resp.Body).Decode(errorResp); err != nil {
 			return fmt.Errorf("Error deleting record: %s %s", name, tpe)
@@ -634,6 +645,136 @@ func (client *Client) DeleteRecordSetByID(zone string, recID string) error {
 	return client.DeleteRecordSet(zone, name, tpe)
 }
 
+// GetZoneMetadata get metadata from zone by its ID
+func (client *Client) GetZoneMetadata(id string) (ResourceZoneMetadata, error) {
+	zone, kind, err := parseID(id)
+	if err != nil {
+		return ResourceZoneMetadata{}, err
+	}
+
+	req, err := client.newRequest("GET", fmt.Sprintf("/servers/localhost/zones/%s/metadata/%s", zone, kind), nil)
+	if err != nil {
+		return ResourceZoneMetadata{}, err
+	}
+
+	resp, err := client.HTTP.Do(req)
+	if err != nil {
+		return ResourceZoneMetadata{}, err
+	}
+	defer resp.Body.Close()
+
+	var zoneMetadata ResourceZoneMetadata
+	err = json.NewDecoder(resp.Body).Decode(&zoneMetadata)
+	if err != nil {
+		return ResourceZoneMetadata{}, err
+	}
+
+	return zoneMetadata, nil
+}
+
+// UpdateZoneMetadata creates new record set in Zone
+func (client *Client) UpdateZoneMetadata(zone string, zoneMetadata ResourceZoneMetadata) (string, error) {
+	body, err := json.Marshal(zoneMetadata)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := client.newRequest("PUT", fmt.Sprintf("/servers/localhost/zones/%s/metadata/%s", zone, zoneMetadata.Kind), body)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := client.HTTP.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errorResp := new(errorResponse)
+		if err = json.NewDecoder(resp.Body).Decode(errorResp); err != nil {
+			return "", fmt.Errorf("Error updating zone metadata: %s", zoneMetadata.Kind)
+		}
+		return "", fmt.Errorf("Error updating zone metadata: %s, reason: %q", zoneMetadata.Kind, errorResp.ErrorMsg)
+	}
+
+	var createdZoneMetadata ResourceZoneMetadata
+	err = json.NewDecoder(resp.Body).Decode(&createdZoneMetadata)
+	if err != nil {
+		return "", err
+	}
+
+	return createdZoneMetadata.ID(zone), nil
+}
+
+// DeleteZoneMetadata deletes zone metadata by its ID
+func (client *Client) DeleteZoneMetadata(id string) error {
+	zone, kind, err := parseID(id)
+	if err != nil {
+		return err
+	}
+
+	req, err := client.newRequest("DELETE", fmt.Sprintf("/servers/localhost/zones/%s/metadata/%s", zone, kind), nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errorResp := new(errorResponse)
+		if err = json.NewDecoder(resp.Body).Decode(errorResp); err != nil {
+			return fmt.Errorf("Error deleting Zone Metadata: %s", kind)
+		}
+		return fmt.Errorf("Error deleting Zone Metadata: %s, reason: %q", kind, errorResp.ErrorMsg)
+	}
+	return nil
+}
+
+// ZoneMetadataExists checks if requested zone exists
+func (client *Client) ZoneMetadataExists(id string) (bool, error) {
+	zone, kind, err := parseID(id)
+	if err != nil {
+		return false, err
+	}
+
+	req, err := client.newRequest("GET", fmt.Sprintf("/servers/localhost/zones/%s/metadata/%s", zone, kind), nil)
+	if err != nil {
+		return false, err
+	}
+
+	resp, err := client.HTTP.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		errorResp := new(errorResponse)
+		if err = json.NewDecoder(resp.Body).Decode(errorResp); err != nil {
+			return false, fmt.Errorf("Error getting Zone Metadata: %s", kind)
+		}
+		return false, fmt.Errorf("Error getting Zone Metadata: %s, reason: %q", kind, errorResp.ErrorMsg)
+	}
+
+	var ZoneMetadata ResourceZoneMetadata
+	err = json.NewDecoder(resp.Body).Decode(&ZoneMetadata)
+
+	if err != nil {
+		return false, err
+	}
+
+	if len(ZoneMetadata.Metadata) == 0 {
+		return false, err
+	}
+
+	return resp.StatusCode == http.StatusOK, nil
+}
+
 func (client *Client) setServerVersion() error {
 	req, err := client.newRequest("GET", "/servers/localhost", nil)
 	if err != nil {
@@ -645,7 +786,7 @@ func (client *Client) setServerVersion() error {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("Invalid response code from server: '%d'. Response body: %v",
 			resp.StatusCode, resp.Body)
 	}
