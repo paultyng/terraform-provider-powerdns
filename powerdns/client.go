@@ -185,6 +185,14 @@ type ZoneInfo struct {
 	SoaEditAPI         string              `json:"soa_edit_api"`
 }
 
+// ZoneInfoUpd is a limited subset for supported updates
+type ZoneInfoUpd struct {
+	Name       string `json:"name"`
+	Kind       string `json:"kind"`
+	SoaEditAPI string `json:"soa_edit_api,omitempty"`
+	Account    string `json:"account"`
+}
+
 // Record represents a PowerDNS record object
 type Record struct {
 	Name     string `json:"name"`
@@ -388,7 +396,7 @@ func (client *Client) CreateZone(zoneInfo ZoneInfo) (ZoneInfo, error) {
 }
 
 // UpdateZone updates a zone
-func (client *Client) UpdateZone(name string, zoneInfo ZoneInfo) error {
+func (client *Client) UpdateZone(name string, zoneInfo ZoneInfoUpd) error {
 	body, err := json.Marshal(zoneInfo)
 	if err != nil {
 		return err
