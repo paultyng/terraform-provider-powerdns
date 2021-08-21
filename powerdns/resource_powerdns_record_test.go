@@ -444,6 +444,52 @@ func TestAccPDNSRecord_SOA(t *testing.T) {
 	})
 }
 
+func TestAccPDNSRecord_A_ZoneMixedCaps(t *testing.T) {
+	resourceName := "powerdns_record.test-a"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckPDNSRecordDestroy,
+		Steps: []resource.TestStep{
+			{
+				// using mixed caps for zone property to create resource with A type
+				Config: testPDNSRecordConfigZoneMixedCaps,
+			},
+			{
+				// using A type record config to confirm plan doesn't generate diff
+				ResourceName:       resourceName,
+				Config:             testPDNSRecordConfigA,
+				ExpectNonEmptyPlan: false,
+				PlanOnly:           true,
+			},
+		},
+	})
+}
+
+func TestAccPDNSRecord_A_NameMixedCaps(t *testing.T) {
+	resourceName := "powerdns_record.test-a"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckPDNSRecordDestroy,
+		Steps: []resource.TestStep{
+			{
+				// using mixed caps for name property to create resource with A type
+				Config: testPDNSRecordConfigNameMixedCaps,
+			},
+			{
+				// using A type record config to confirm plan doesn't generate diff
+				ResourceName:       resourceName,
+				Config:             testPDNSRecordConfigA,
+				ExpectNonEmptyPlan: false,
+				PlanOnly:           true,
+			},
+		},
+	})
+}
+
 func testAccCheckPDNSRecordDestroy(s *terraform.State) error {
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "powerdns_record" {
@@ -653,4 +699,22 @@ resource "powerdns_record" "test-soa" {
 	type = "SOA"
 	ttl = 3600
 	records = [ "something.something. hostmaster.sysa.xyz. 2019090301 10800 3600 604800 3600" ]
+}`
+
+const testPDNSRecordConfigZoneMixedCaps = `
+resource "powerdns_record" "test-a" {
+	zone = "sySa.xyz."
+	name = "testpdnsrecordconfiga.sysa.xyz."
+	type = "A"
+	ttl = 60
+	records = [ "1.1.1.1", "2.2.2.2" ]
+}`
+
+const testPDNSRecordConfigNameMixedCaps = `
+resource "powerdns_record" "test-a" {
+	zone = "sysa.xyz."
+	name = "TestPDNSRecordConfigA.sysa.xyz."
+	type = "A"
+	ttl = 60
+	records = [ "1.1.1.1", "2.2.2.2" ]
 }`

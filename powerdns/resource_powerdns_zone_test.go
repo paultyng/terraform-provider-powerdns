@@ -66,8 +66,31 @@ func TestAccPDNSZoneNativeSmallCaps(t *testing.T) {
 		CheckDestroy: testAccCheckPDNSZoneDestroy,
 		Steps: []resource.TestStep{
 			{
-				// using small caps config to create resource with test-native name
+				// using small caps config to create resource with test-native kind
 				Config: testPDNSZoneConfigNativeSmallCaps,
+			},
+			{
+				// using test-native config with Native to confirm plan doesn't generate diff
+				ResourceName:       resourceName,
+				Config:             testPDNSZoneConfigNative,
+				ExpectNonEmptyPlan: false,
+				PlanOnly:           true,
+			},
+		},
+	})
+}
+
+func TestAccPDNSZoneNativeNameMixedCaps(t *testing.T) {
+	resourceName := "powerdns_zone.test-native"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckPDNSZoneDestroy,
+		Steps: []resource.TestStep{
+			{
+				// using mixed caps config to create resource with test-native name
+				Config: testPDNSZoneConfigNativeNameMixedCaps,
 			},
 			{
 				// using test-native config with Native to confirm plan doesn't generate diff
@@ -440,6 +463,13 @@ resource "powerdns_zone" "test-native" {
 const testPDNSZoneConfigNativeSmallCaps = `
 resource "powerdns_zone" "test-native" {
 	name = "sysa.abc."
+	kind = "native"
+	nameservers = ["ns1.sysa.abc.", "ns2.sysa.abc."]
+}`
+
+const testPDNSZoneConfigNativeNameMixedCaps = `
+resource "powerdns_zone" "test-native" {
+	name = "sySa.abc."
 	kind = "native"
 	nameservers = ["ns1.sysa.abc.", "ns2.sysa.abc."]
 }`

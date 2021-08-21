@@ -522,7 +522,7 @@ func (client *Client) ListRecordsInRRSet(zone string, name string, tpe string) (
 
 	records := make([]Record, 0, 10)
 	for _, r := range allRecords {
-		if r.Name == name && r.Type == tpe {
+		if strings.EqualFold(r.Name, name) && r.Type == tpe {
 			records = append(records, r)
 		}
 	}
@@ -547,7 +547,7 @@ func (client *Client) RecordExists(zone string, name string, tpe string) (bool, 
 	}
 
 	for _, record := range allRecords {
-		if record.Name == name && record.Type == tpe {
+		if strings.EqualFold(record.Name, name) && record.Type == tpe {
 			return true, nil
 		}
 	}
