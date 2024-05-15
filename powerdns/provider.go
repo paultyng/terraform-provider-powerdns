@@ -21,6 +21,12 @@ func Provider() terraform.ResourceProvider {
 				DefaultFunc: schema.EnvDefaultFunc("PDNS_SERVER_URL", nil),
 				Description: "Location of PowerDNS server",
 			},
+			"zone_control": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("PDNS_ZONE_CONTROL", "localhost"),
+				Description: "Location of PowerDNS Zone Control server",
+			},
 			"insecure_https": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -66,6 +72,7 @@ func providerConfigure(data *schema.ResourceData) (interface{}, error) {
 	config := Config{
 		APIKey:          data.Get("api_key").(string),
 		ServerURL:       data.Get("server_url").(string),
+		ZC:              data.Get("zone_control").(string),
 		InsecureHTTPS:   data.Get("insecure_https").(bool),
 		CACertificate:   data.Get("ca_certificate").(string),
 		CacheEnable:     data.Get("cache_requests").(bool),
