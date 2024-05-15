@@ -18,6 +18,7 @@ type Config struct {
 	CacheEnable     bool
 	CacheMemorySize string
 	CacheTTL        int
+	ZC              string
 }
 
 // Client returns a new client for accessing PowerDNS
@@ -39,7 +40,7 @@ func (c *Config) Client() (*Client, error) {
 
 	tlsConfig.InsecureSkipVerify = c.InsecureHTTPS
 
-	client, err := NewClient(c.ServerURL, c.APIKey, tlsConfig, c.CacheEnable, c.CacheMemorySize, c.CacheTTL)
+	client, err := NewClient(c.ServerURL, c.APIKey, tlsConfig, c.CacheEnable, c.CacheMemorySize, c.CacheTTL, c.ZC)
 
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up PowerDNS client: %s", err)
