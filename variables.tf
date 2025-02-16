@@ -5,7 +5,7 @@ variable "zones" {
 }
 
 variable "nameservers" {
-	description = "List of nameservers to configure in the given zones."
+	description = "List of nameservers to configure in the given zones (automatically populated from NS records if not specified)."
 	type        = list
 	default     = []
 }

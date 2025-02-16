@@ -4,6 +4,8 @@ module "example_com" {
     "example.com.",
   ]
 
+  # preferably declare NS records instead of this
+  # https://github.com/pan-net/terraform-provider-powerdns/issues/63
   nameservers = [
     "ns1.example.com.",
     "ns2.example.com.",

@@ -1,13 +1,21 @@
 locals {
 	zones = var.zones
 	nameservers = var.nameservers
+	nameservers_records = flatten([ for r in var.records : [ for rd in r.records : rd ] if r.type == "NS" ])
 }
 
 resource "powerdns_zone" "zone" {
 	for_each = toset(local.zones)
 	name = each.value
 	kind = "Native"
-	nameservers = local.nameservers
+	nameservers = length(var.nameservers) == 0 ? local.nameservers_records : var.nameservers
+	lifecycle {
+		ignore_changes = [
+			# https://github.com/pan-net/terraform-provider-powerdns/issues/63
+			# users of the module are expected to use NS records for tracking nameservers
+			nameservers,
+		]
+	}
 }
 
 locals {
