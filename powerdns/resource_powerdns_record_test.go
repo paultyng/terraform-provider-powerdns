@@ -444,9 +444,34 @@ func TestAccPDNSRecord_SOA(t *testing.T) {
 	})
 }
 
+func TestAccPDNSRecordSOA_SOA(t *testing.T) {
+	resourceName := "powerdns_record_soa.test-soa2"
+	resourceID := `{"zone":"test-soa2-sysa.xyz.","id":"test-soa2-sysa.xyz.:::SOA"}`
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckPDNSRecordDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testPDNSRecordConfigSOA2,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckPDNSRecordExists(resourceName),
+				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportStateId:     resourceID,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func testAccCheckPDNSRecordDestroy(s *terraform.State) error {
 	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "powerdns_record" {
+		if rs.Type != "powerdns_record" && rs.Type != "powerdns_record_soa" {
 			continue
 		}
 
@@ -653,4 +678,25 @@ resource "powerdns_record" "test-soa" {
 	type = "SOA"
 	ttl = 3600
 	records = [ "something.something. hostmaster.sysa.xyz. 2019090301 10800 3600 604800 3600" ]
+}`
+
+const testPDNSRecordConfigSOA2 = `
+resource "powerdns_record_soa" "test-soa2" {
+	zone = "test-soa2-sysa.xyz."
+	name = "test-soa2-sysa.xyz."
+	type = "SOA"
+	ttl = 3600
+	mname = "ns1.sysa.xyz."
+	rname = "hostmaster.sysa.xyz."
+	serial = 0
+	refresh = 7200
+	retry = 600
+	expire = 1209600
+	minimum = 6400
+
+	lifecycle {
+		ignore_changes = [
+			serial,
+		]
+	}
 }`
