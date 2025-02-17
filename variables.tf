@@ -15,3 +15,9 @@ variable "records" {
 	type        = any
 	default     = []
 }
+
+variable "soa_edit_api" {
+	description = "SOA-EDIT-API metadata to configure in the given zones."
+	type = string
+	default = "INCREMENT"
+}
