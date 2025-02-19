@@ -54,8 +54,9 @@ func Provider() terraform.ResourceProvider {
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
-			"powerdns_zone":   resourcePDNSZone(),
-			"powerdns_record": resourcePDNSRecord(),
+			"powerdns_zone":       resourcePDNSZone(),
+			"powerdns_record":     resourcePDNSRecord(),
+			"powerdns_record_soa": resourcePDNSRecordSOA(),
 		},
 
 		ConfigureFunc: providerConfigure,

@@ -51,6 +51,9 @@ services:
       curl -X POST http://pdns:8081/api/v1/servers/localhost/zones \
         -d '{"name": "test-soa-sysa.xyz.", "kind": "Native", "soa_edit_api": "", "nameservers": ["ns1.sysa.xyz."]}' \
         -H "X-API-Key: secret"
+      curl -X POST http://pdns:8081/api/v1/servers/localhost/zones \
+        -d '{"name": "test-soa2-sysa.xyz.", "kind": "Native", "soa_edit_api": "EPOCH", "nameservers": ["ns1.sysa.xyz."]}' \
+        -H "X-API-Key: secret"
       curl -s -X POST http://pdns:8081/api/v1/servers/localhost/zones \
         -d '{"name": "in-addr.arpa.", "kind": "Native", "nameservers": ["ns1.sysa.xyz."]}' \
         -H "X-API-Key: secret"

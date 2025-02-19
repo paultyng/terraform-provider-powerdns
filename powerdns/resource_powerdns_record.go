@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -61,9 +62,88 @@ func resourcePDNSRecord() *schema.Resource {
 	}
 }
 
-func resourcePDNSRecordCreate(d *schema.ResourceData, meta interface{}) error {
-	client := meta.(*Client)
+func resourcePDNSRecordSOA() *schema.Resource {
+	return &schema.Resource{
+		Create: resourcePDNSRecordCreateSOA,
+		Read:   resourcePDNSRecordRead,
+		Delete: resourcePDNSRecordDelete,
+		Exists: resourcePDNSRecordExists,
+		Importer: &schema.ResourceImporter{
+			State: resourcePDNSRecordImport,
+		},
 
+		Schema: map[string]*schema.Schema{
+			"zone": {
+				Type:     schema.TypeString,
+				Required: true,
+				ForceNew: true,
+			},
+
+			"name": {
+				Type:     schema.TypeString,
+				Required: true,
+				ForceNew: true,
+			},
+
+			"type": {
+				Type:     schema.TypeString,
+				Required: true,
+				ForceNew: true,
+			},
+
+			"ttl": {
+				Type:     schema.TypeInt,
+				Required: true,
+				ForceNew: true,
+			},
+
+			"mname": {
+				Type:     schema.TypeString,
+				Optional: false,
+				Required: true,
+				ForceNew: true,
+			},
+			"rname": {
+				Type:     schema.TypeString,
+				Optional: false,
+				Required: true,
+				ForceNew: true,
+			},
+			"serial": {
+				Type:     schema.TypeInt,
+				Optional: false,
+				Required: true,
+				ForceNew: true,
+			},
+			"refresh": {
+				Type:     schema.TypeInt,
+				Optional: false,
+				Required: true,
+				ForceNew: true,
+			},
+			"retry": {
+				Type:     schema.TypeInt,
+				Optional: false,
+				Required: true,
+				ForceNew: true,
+			},
+			"expire": {
+				Type:     schema.TypeInt,
+				Optional: false,
+				Required: true,
+				ForceNew: true,
+			},
+			"minimum": {
+				Type:     schema.TypeInt,
+				Optional: false,
+				Required: true,
+				ForceNew: true,
+			},
+		},
+	}
+}
+
+func resourcePDNSRecordCreatePrepare(d *schema.ResourceData, meta interface{}) (ResourceRecordSet, string, int) {
 	rrSet := ResourceRecordSet{
 		Name: d.Get("name").(string),
 		Type: d.Get("type").(string),
@@ -72,52 +152,96 @@ func resourcePDNSRecordCreate(d *schema.ResourceData, meta interface{}) error {
 
 	zone := d.Get("zone").(string)
 	ttl := d.Get("ttl").(int)
+
+	return rrSet, zone, ttl
+}
+
+func resourcePDNSRecordCreate(d *schema.ResourceData, meta interface{}) error {
+	rrSet, zone, ttl := resourcePDNSRecordCreatePrepare(d, meta)
 	recs := d.Get("records").(*schema.Set).List()
 	setPtr := false
-
-	if v, ok := d.GetOk("set_ptr"); ok {
-		setPtr = v.(bool)
-	}
 
 	// begin: ValidateFunc
 	// https://www.terraform.io/docs/extend/schemas/schema-behaviors.html
 	// "ValidateFunc is not yet supported on lists or sets"
 	// when terraform will support ValidateFunc for non-primitives
 	// we can move this block there
+	if len(recs) == 0 {
+		return fmt.Errorf("'records' must not be empty")
+	}
+
 	for _, recs := range recs {
 		if len(strings.Trim(recs.(string), " ")) == 0 {
 			log.Printf("[WARN] One or more values in 'records' contain empty '' value(s)")
 		}
 	}
-	if !(len(recs) > 0) {
-		return fmt.Errorf("'records' must not be empty")
-	}
 	// end: ValidateFunc
 
-	if len(recs) > 0 {
-		records := make([]Record, 0, len(recs))
-		for _, recContent := range recs {
-			records = append(records,
-				Record{Name: rrSet.Name,
-					Type:    rrSet.Type,
-					TTL:     ttl,
-					Content: recContent.(string),
-					SetPtr:  setPtr})
-		}
-
-		rrSet.Records = records
-
-		log.Printf("[DEBUG] Creating PowerDNS Record: %#v", rrSet)
-
-		recID, err := client.ReplaceRecordSet(zone, rrSet)
-		if err != nil {
-			return fmt.Errorf("Failed to create PowerDNS Record: %s", err)
-		}
-
-		d.SetId(recID)
-		log.Printf("[INFO] Created PowerDNS Record with ID: %s", d.Id())
-
+	if v, ok := d.GetOk("set_ptr"); ok {
+		setPtr = v.(bool)
 	}
+
+	records := make([]Record, 0, len(recs))
+	for _, recContent := range recs {
+		records = append(records,
+			Record{Name: rrSet.Name,
+				Type:    rrSet.Type,
+				TTL:     ttl,
+				Content: recContent.(string),
+				SetPtr:  setPtr})
+	}
+
+	rrSet.Records = records
+
+	return (resourcePDNSRecordCreateFinish(d, meta, zone, rrSet))
+}
+
+func resourcePDNSRecordCreateSOA(d *schema.ResourceData, meta interface{}) error {
+	rrSet, zone, ttl := resourcePDNSRecordCreatePrepare(d, meta)
+	client := meta.(*Client)
+
+	log.Printf("[DEBUG] Searching existing SOA record at %s => %s", zone, d.Get("name").(string))
+	soa_records, err := client.ListRecordsInRRSet(zone, d.Get("name").(string), "SOA")
+	log.Printf("[DEBUG] Found existing SOA records %v", soa_records)
+	if err != nil {
+		return fmt.Errorf("Failed to fetch old SOA record: %s", err)
+	}
+	var serial int
+	if len(soa_records) > 0 {
+		serial, err = strconv.Atoi(strings.Fields(soa_records[0].Content)[2])
+		if err != nil {
+			return fmt.Errorf("Failed to parse old serial value in SOA record: %s", err)
+		}
+	} else {
+		serial = d.Get("serial").(int)
+	}
+	log.Printf("[DEBUG] Set serial number to %d", serial)
+
+	records := make([]Record, 0, 1)
+	records = append(records,
+		Record{Name: rrSet.Name,
+			Type:    rrSet.Type,
+			TTL:     ttl,
+			Content: fmt.Sprintf("%s %s %d %d %d %d %d", d.Get("mname"), d.Get("rname"), serial, d.Get("refresh"), d.Get("retry"), d.Get("expire"), d.Get("minimum")),
+			SetPtr:  false})
+
+	rrSet.Records = records
+
+	return (resourcePDNSRecordCreateFinish(d, meta, zone, rrSet))
+}
+
+func resourcePDNSRecordCreateFinish(d *schema.ResourceData, meta interface{}, zone string, rrSet ResourceRecordSet) error {
+	client := meta.(*Client)
+
+	log.Printf("[DEBUG] Creating PowerDNS Record: %#v", rrSet)
+
+	recID, err := client.ReplaceRecordSet(zone, rrSet)
+	if err != nil {
+		return fmt.Errorf("Failed to create PowerDNS Record: %s", err)
+	}
+
+	d.SetId(recID)
+	log.Printf("[INFO] Created PowerDNS Record with ID: %s", d.Id())
 
 	return resourcePDNSRecordRead(d, meta)
 }
@@ -132,12 +256,52 @@ func resourcePDNSRecordRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	recs := make([]string, 0, len(records))
-	for _, r := range records {
-		recs = append(recs, r.Content)
-	}
-	d.Set("records", recs)
+	if d.Get("type") == "SOA" {
+		rsplit := strings.Fields(records[0].Content)
+		mname := rsplit[0]
+		d.Set("mname", mname)
+		rname := rsplit[1]
+		d.Set("rname", rname)
 
-	if len(records) > 0 {
+		serial, err := strconv.Atoi(rsplit[2])
+		if err != nil {
+			return fmt.Errorf("Failed to parse serial value in SOA record: %s", err)
+		}
+		d.Set("serial", serial)
+
+		refresh, err := strconv.Atoi(rsplit[3])
+		if err != nil {
+			return fmt.Errorf("Failed to parse refresh value in SOA record: %s", err)
+		}
+		d.Set("refresh", refresh)
+
+		retry, err := strconv.Atoi(rsplit[4])
+		if err != nil {
+			return fmt.Errorf("Failed to parse retry value in SOA record: %s", err)
+		}
+		d.Set("retry", retry)
+
+		expire, err := strconv.Atoi(rsplit[5])
+		if err != nil {
+			return fmt.Errorf("Failed to parse expire value in SOA record: %s", err)
+		}
+		d.Set("expire", expire)
+
+		minimum, err := strconv.Atoi(rsplit[6])
+		if err != nil {
+			return fmt.Errorf("Failed to parse minimum value in SOA record: %s", err)
+		}
+		d.Set("minimum", minimum)
+
+		log.Printf("[DEBUG] Parsed PowerDNS SOA Record contents: mname %s rname %s serial %d refresh %d expire %d minimum %d", mname, rname, serial, refresh, expire, minimum)
+	} else {
+		for _, r := range records {
+			recs = append(recs, r.Content)
+		}
+		d.Set("records", recs)
+	}
+
+	if len(records) > 0 || d.Get("Type") == "SOA" {
 		d.Set("ttl", records[0].TTL)
 	}
 
